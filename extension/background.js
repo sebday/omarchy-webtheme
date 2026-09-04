@@ -56,7 +56,7 @@ function sendNative(msg) {
       if (!pending.has(id)) return;
       pending.delete(id);
       reject(new Error("native host timeout"));
-    }, 12000);
+    }, 5000);
   });
 }
 
@@ -73,10 +73,16 @@ function applyBadge(payload) {
 }
 
 function extText(path, bust) {
-  return fetch(chrome.runtime.getURL(path) + "?v=" + bust, { cache: "no-store" }).then((response) => {
+  return fetch(chrome.runtime.getURL(path) + "?v=" + bust, { cache: "reload" }).then((response) => {
     if (!response.ok) throw new Error(path + " " + response.status);
     return response.text();
   });
+}
+
+async function readCatalog() {
+  const catalog = JSON.parse(await extText("catalog.json", Date.now()));
+  applyBadge(catalog);
+  return catalog;
 }
 
 async function cssForTab(catalog, colors, tab, bust) {
@@ -134,12 +140,11 @@ async function broadcastReload() {
   cssCache.clear();
   let catalog;
   try {
-    catalog = JSON.parse(await extText("catalog.json", bust));
+    catalog = await readCatalog();
   } catch (err) {
     console.warn("omarchy webtheme: catalog", err);
     return;
   }
-  applyBadge(catalog);
   const colors = await extText("colors.css", bust).catch(() => "");
   const revision = await extText("revision", bust).catch(() => bust);
 
@@ -163,9 +168,7 @@ async function broadcastReload() {
 }
 
 function refreshBadge() {
-  sendNative({ type: "list" })
-    .then(applyBadge)
-    .catch(() => chrome.action.setBadgeText({ text: "" }));
+  readCatalog().catch(() => chrome.action.setBadgeText({ text: "" }));
 }
 
 function connect() {
@@ -200,13 +203,18 @@ function connect() {
     pending.clear();
     reconnectTimer = setTimeout(connect, 2000);
   });
-  refreshBadge();
 }
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (!msg || typeof msg !== "object") {
     sendResponse({ ok: false, error: "invalid message" });
     return false;
+  }
+  if (msg.type === "list") {
+    readCatalog()
+      .then((catalog) => sendResponse(Object.assign({ ok: true, type: "list" }, catalog)))
+      .catch((err) => sendResponse({ ok: false, error: String(err && err.message ? err.message : err) }));
+    return true;
   }
   sendNative(msg)
     .then((reply) => {
@@ -220,3 +228,4 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 chrome.runtime.onStartup.addListener(connect);
 chrome.runtime.onInstalled.addListener(connect);
 connect();
+refreshBadge();

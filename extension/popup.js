@@ -13,7 +13,7 @@ let tabUrl = "";
 let tabTitle = "";
 let tabHost = "";
 
-fetch(chrome.runtime.getURL("colors.css"))
+fetch(chrome.runtime.getURL("colors.css") + "?v=" + Date.now(), { cache: "reload" })
   .then((response) => (response.ok ? response.text() : ""))
   .then((css) => {
     if (!css) return;
@@ -60,15 +60,41 @@ function showError(text) {
   errorEl.textContent = text || "";
 }
 
-function call(msg) {
-  return chrome.runtime.sendMessage(msg);
+function withTimeout(promise, ms, label) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      setTimeout(() => reject(new Error(label || "timeout")), ms);
+    }),
+  ]);
+}
+
+async function call(msg) {
+  try {
+    return await withTimeout(Promise.resolve(chrome.runtime.sendMessage(msg)), 5000, "native host timeout");
+  } catch (err) {
+    return { ok: false, error: String(err && err.message ? err.message : err) };
+  }
+}
+
+async function catalogPayload() {
+  const catalog = await fetch(chrome.runtime.getURL("catalog.json") + "?v=" + Date.now(), {
+    cache: "reload",
+  }).then((response) => {
+    if (!response.ok) throw new Error("catalog " + response.status);
+    return response.json();
+  });
+  return {
+    ok: true,
+    enabled: catalog.enabled !== false,
+    sites: Array.isArray(catalog.sites) ? catalog.sites : [],
+  };
 }
 
 function row(site, currentId) {
   const el = document.createElement("label");
   el.className = "row" + (site.id === currentId ? " current" : "");
-  el.innerHTML =
-    "<div><strong></strong><span></span></div><input type='checkbox' />";
+  el.innerHTML = "<div><strong></strong><span></span></div><input type='checkbox' />";
   el.querySelector("strong").textContent = site.name || site.id;
   el.querySelector("span").textContent = hostsLabel(site);
   const box = el.querySelector("input");
@@ -90,21 +116,12 @@ function row(site, currentId) {
   return el;
 }
 
-async function load() {
-  const reply = await call({ type: "list" });
-  if (!reply || reply.ok === false) {
-    meta.textContent = "Host offline";
-    showError((reply && reply.error) || "Native host not connected. Fully quit Brave after install.");
-    return;
-  }
-
+function render(reply) {
   const sites = Array.isArray(reply.sites) ? reply.sites : [];
   const on = reply.enabled !== false;
   const enabledCount = sites.filter((site) => site.enabled !== false).length;
   globalToggle.checked = on;
-  meta.textContent = on
-    ? enabledCount + " enabled"
-    : "Paused";
+  meta.textContent = on ? enabledCount + " enabled" : "Paused";
 
   const bundled = sites.filter((site) => site.source !== "user");
   const mine = sites.filter((site) => site.source === "user");
@@ -136,6 +153,15 @@ async function load() {
   }
 }
 
+async function load() {
+  try {
+    render(await catalogPayload());
+  } catch (err) {
+    meta.textContent = "Failed to load";
+    showError(String(err && err.message ? err.message : err));
+  }
+}
+
 globalToggle.addEventListener("change", async () => {
   showError("");
   const reply = await call({ type: "enabled", enabled: globalToggle.checked });
@@ -160,14 +186,17 @@ themeBtn.addEventListener("click", async () => {
   themeBtn.hidden = true;
 });
 
-chrome.tabs.query({ active: true, currentWindow: true }, async (tabs) => {
-  const tab = tabs && tabs[0];
-  tabUrl = tab && tab.url ? tab.url : "";
-  tabTitle = tab && tab.title ? tab.title : "";
+async function init() {
   try {
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    const tab = tabs && tabs[0];
+    tabUrl = tab && tab.url ? tab.url : "";
+    tabTitle = tab && tab.title ? tab.title : "";
     tabHost = tabUrl && /^https?:/i.test(tabUrl) ? new URL(tabUrl).hostname : "";
   } catch {
     tabHost = "";
   }
   await load();
-});
+}
+
+init();

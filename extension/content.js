@@ -4,6 +4,7 @@
   const STYLE_ID = "omarchy-webtheme-style";
 
   let lastKey = "";
+  let lastRevision = "";
   let appliedCss = "";
 
   const match = globalThis.omarchyWebthemeMatch || {};
@@ -38,7 +39,7 @@
   }
 
   function fetchText(url) {
-    return fetch(url, { cache: "no-store" }).then((response) => {
+    return fetch(url, { cache: "reload" }).then((response) => {
       if (!response.ok) throw new Error(url + " " + response.status);
       return response.text();
     });
@@ -50,13 +51,14 @@
 
   function checkForUpdate(force) {
     const hostname = location.hostname;
-    const token = force ? String(Date.now()) : "live";
+    const token = String(Date.now());
 
     Promise.all([
       fetchText(extUrl("catalog.json", token)),
       fetchText(extUrl("revision", token)).catch(() => token),
     ])
       .then(([catalogText, revision]) => {
+        lastRevision = revision;
         const catalog = JSON.parse(catalogText);
         if (catalog && catalog.enabled === false) {
           removeCSS();
@@ -81,6 +83,18 @@
       });
   }
 
+  function pollRevision() {
+    if (window !== window.top) return;
+    if (document.visibilityState !== "visible") return;
+    fetchText(extUrl("revision", Date.now()))
+      .then((rev) => {
+        if (rev === lastRevision) return;
+        lastRevision = rev;
+        checkForUpdate(true);
+      })
+      .catch(() => {});
+  }
+
   chrome.runtime.onMessage.addListener((msg) => {
     if (!msg || msg.type !== "omarchy-webtheme-reload") return;
     if (typeof msg.css === "string") {
@@ -93,6 +107,10 @@
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") checkForUpdate(true);
   });
+
+  if (window === window.top) {
+    setInterval(pollRevision, 800);
+  }
 
   checkForUpdate(true);
 })();

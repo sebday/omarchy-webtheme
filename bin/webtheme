@@ -191,7 +191,7 @@ write_manifest() {
   jq -n --arg key "$EXTENSION_KEY" '{
     manifest_version: 3,
     name: "Omarchy Webtheme",
-    version: "1.0.6",
+    version: "1.0.7",
     key: $key,
     description: "Omarchy website themes. Manage site packages from the toolbar popup.",
     permissions: ["nativeMessaging", "activeTab", "tabs", "scripting"],
@@ -248,7 +248,7 @@ assemble() {
     fi
     [[ -n $css_name ]] || continue
     catalog_json=$(jq --argjson site "$site" --arg css "$css_name" '
-      . + [{id: $site.id, name: $site.name, matches: $site.matches, enabled: $site.enabled, css: $css}]
+      . + [{id: $site.id, name: $site.name, matches: $site.matches, enabled: $site.enabled, css: $css, source: $site.source}]
     ' <<<"$catalog_json")
     count=$((count + 1))
   done < <(jq -c '.[]' <<<"$sites")
