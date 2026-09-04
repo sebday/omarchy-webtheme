@@ -1,0 +1,7 @@
+{
+  "id": "shoelace",
+  "name": "Shoelace",
+  "matches": ["https://shoelace.style/*"],
+  "themeCss": "shoelace-hex.css",
+  "enabled": true
+}

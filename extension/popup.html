@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Omarchy Webtheme</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header>
+      <div>
+        <h1>Webtheme</h1>
+        <p id="meta">Loading…</p>
+      </div>
+      <label class="toggle">
+        <input id="global" type="checkbox" />
+        <span>On</span>
+      </label>
+    </header>
+
+    <section id="current" class="card" hidden>
+      <p id="current-host"></p>
+      <p id="current-status"></p>
+      <button id="theme-site" type="button" hidden>Theme this site</button>
+    </section>
+
+    <p id="error" class="error" hidden></p>
+
+    <section>
+      <h2>Bundled</h2>
+      <div id="bundled" class="list"></div>
+    </section>
+
+    <section>
+      <h2>Mine</h2>
+      <div id="mine" class="list"></div>
+      <p id="mine-empty" class="empty" hidden>No personal packages yet.</p>
+    </section>
+
+    <script src="popup.js"></script>
+  </body>
+</html>
