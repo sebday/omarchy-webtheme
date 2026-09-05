@@ -8,9 +8,9 @@ html.theme-light {
     --color-primary-opacity-hover: color-mix(in srgb, var(--text-accent) 24%, transparent) !important;
     --color-primary-tint: color-mix(in srgb, var(--text-accent) 10%, transparent) !important;
     --color-background: var(--bg-primary) !important;
-    --color-background-secondary: var(--bg-primary) !important;
+    --color-background-secondary: var(--bg-secondary) !important;
     --color-background-secondary-accent: var(--bg-secondary) !important;
-    --color-background-sidebar: var(--bg-primary) !important;
+    --color-background-sidebar: color-mix(in srgb, var(--bg-secondary) 86%, var(--text-primary)) !important;
     --color-background-compact-menu: color-mix(in srgb, var(--bg-primary) 88%, transparent) !important;
     --color-background-compact-menu-reactions: color-mix(in srgb, var(--bg-primary) 88%, transparent) !important;
     --color-background-compact-menu-hover: color-mix(in srgb, var(--bg-secondary) 65%, transparent) !important;
@@ -68,14 +68,11 @@ html,
 body,
 #root,
 #Main,
-#LeftColumn,
 #MiddleColumn,
 #RightColumn,
 .MiddleHeader,
-.LeftMainHeader,
 .middle-column-footer,
 .messages-layout,
-.chat-list,
 .Composer,
 .composer-wrapper,
 .message-input-wrapper,
@@ -91,9 +88,15 @@ body,
     background: transparent !important;
 }
 
-#LeftColumn {
+#LeftColumn,
+#column-left,
+.sidebar-left,
+.LeftMainHeader,
+.chat-list {
     margin: 0 !important;
     border-radius: 0 !important;
+    background: var(--color-background-sidebar) !important;
+    color: var(--text-primary) !important;
 }
 
 #MiddleColumn {
@@ -104,11 +107,24 @@ body,
 .SearchInput,
 .message-input-wrapper,
 .Menu .bubble,
-.DropdownMenu .bubble,
-.ListItem.Chat .ListItem-button:hover,
-.ListItem.Chat.selected .ListItem-button,
-.ListItem.Chat.active .ListItem-button {
+.DropdownMenu .bubble {
     background: var(--bg-secondary) !important;
+}
+
+.ListItem.Chat .ListItem-button,
+.chatlist-chat {
+    background: var(--color-background-sidebar) !important;
+}
+
+.ListItem.Chat .ListItem-button:hover,
+.chatlist-chat:hover {
+    background: color-mix(in srgb, var(--color-background-sidebar) 78%, var(--text-primary)) !important;
+}
+
+.ListItem.Chat.selected .ListItem-button,
+.ListItem.Chat.active .ListItem-button,
+.chatlist-chat.active {
+    background: var(--color-chat-active) !important;
 }
 
 .Message .message-content {
