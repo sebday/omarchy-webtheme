@@ -6,11 +6,11 @@
 
 # Webtheme
 
-Style any website to match your Omarchy theme. Websites switch colour scheme with the theme.
+Style any website to match your Omarchy theme. Websites switch colour scheme along with the Omarchy theme.
 
-Install the plugin and restart the browser to pick the extension. and matching sites pick up the current Omarchy palette. 
+Install the plugin and restart the browser to pick the extension. 
 
-The plugin ships a small unpacked MV3 extension and appends it to the existing `--load-extension=` line in Chromium/Brave flags (same mechanism Omarchy uses for WhatsApp Slim).
+The plugin ships a small unpacked MV3 extension and appends it to the existing `--load-extension=` line in Chromium/Brave flags (the same mechanism Omarchy uses for WhatsApp Slim).
 
 ## Install
 

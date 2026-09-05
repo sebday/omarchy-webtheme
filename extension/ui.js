@@ -35,6 +35,33 @@ const WebthemeUI = {
     return catalog;
   },
 
+  applyEnabledFlag(catalog, flagText) {
+    if (!catalog || typeof flagText !== "string") return catalog;
+    const trimmed = flagText.trim();
+    if (trimmed === "false") catalog.enabled = false;
+    else if (trimmed === "true") catalog.enabled = true;
+    return catalog;
+  },
+
+  async pruneThemeJobs(sites) {
+    let jobs = [];
+    try {
+      const data = await chrome.storage.session.get("themeJobs");
+      jobs = Array.isArray(data.themeJobs) ? data.themeJobs : [];
+    } catch {
+      return [];
+    }
+    const kept = jobs.filter((job) => job && job.host && !this.siteForHost(sites, job.host));
+    if (kept.length !== jobs.length) {
+      try {
+        await chrome.storage.session.set({ themeJobs: kept });
+      } catch {
+        /* ignore */
+      }
+    }
+    return kept;
+  },
+
   async overlayFromStorage() {
     try {
       const data = await chrome.storage.local.get("enabledOverlay");
@@ -43,7 +70,18 @@ const WebthemeUI = {
     } catch {
       /* ignore */
     }
-    return { enabled: true, siteEnabled: {} };
+    return { siteEnabled: {} };
+  },
+
+  async enabledFlagFromFiles() {
+    try {
+      const text = await fetch(chrome.runtime.getURL("enabled") + "?v=" + Date.now(), {
+        cache: "reload",
+      }).then((response) => (response.ok ? response.text() : ""));
+      return text || "";
+    } catch {
+      return "";
+    }
   },
 
   async catalogFromFiles() {
@@ -54,6 +92,7 @@ const WebthemeUI = {
       return response.json();
     });
     this.applyOverlay(catalog, await this.overlayFromStorage());
+    this.applyEnabledFlag(catalog, await this.enabledFlagFromFiles());
     return {
       ok: true,
       enabled: catalog.enabled !== false,

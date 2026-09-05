@@ -98,7 +98,7 @@ async function loadOverlay() {
   } catch {
     /* ignore */
   }
-  return { enabled: true, siteEnabled: {} };
+  return { siteEnabled: {} };
 }
 
 async function saveOverlay(overlay) {
@@ -119,6 +119,14 @@ function applyOverlay(catalog, overlay) {
     if (!site || !site.id || !Object.prototype.hasOwnProperty.call(map, site.id)) continue;
     site.enabled = map[site.id] !== false;
   }
+  return catalog;
+}
+
+function applyEnabledFlag(catalog, flagText) {
+  if (!catalog || typeof flagText !== "string") return catalog;
+  const trimmed = flagText.trim();
+  if (trimmed === "false") catalog.enabled = false;
+  else if (trimmed === "true") catalog.enabled = true;
   return catalog;
 }
 
@@ -150,8 +158,11 @@ async function hydrateOverlayFromNative() {
 }
 
 async function readCatalog() {
-  const catalog = JSON.parse(await extText("catalog.json", Date.now()));
+  const bust = String(Date.now());
+  const catalog = JSON.parse(await extText("catalog.json", bust));
   applyOverlay(catalog, await loadOverlay());
+  const enabledText = await extText("enabled", bust).catch(() => "");
+  applyEnabledFlag(catalog, enabledText);
   applyBadge(catalog);
   await resolveThemeJobs(catalog);
   return catalog;
@@ -364,6 +375,7 @@ function connect() {
     port = null;
     for (const waiter of pending.values()) waiter.reject(new Error(err || "native host disconnected"));
     pending.clear();
+    reconnectTimer = setTimeout(connect, 2000);
   });
 }
 

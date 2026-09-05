@@ -8,6 +8,8 @@
   let lastKey = "";
   let lastRevision = "";
   let appliedCss = "";
+  let paused = false;
+  let updateGen = 0;
 
   function injectCSS(css) {
     let el = document.getElementById(STYLE_ID);
@@ -16,14 +18,30 @@
       el.id = STYLE_ID;
     }
     el.textContent = css;
-    (document.head || document.documentElement).appendChild(el);
+    const parent = document.head || document.documentElement;
+    parent.appendChild(el);
+  }
+
+  function clearStyle() {
+    appliedCss = "";
+    lastKey = "";
+    paused = true;
+    const el = document.getElementById(STYLE_ID);
+    if (el) el.remove();
   }
 
   function removeCSS() {
-    const el = document.getElementById(STYLE_ID);
-    if (el) el.remove();
-    appliedCss = "";
-    lastKey = "";
+    updateGen += 1;
+    clearStyle();
+  }
+
+  function stylePresent() {
+    return !!document.getElementById(STYLE_ID);
+  }
+
+  function ensureStyle() {
+    if (paused || !appliedCss || stylePresent()) return;
+    injectCSS(appliedCss);
   }
 
   function applyPayload(css, key) {
@@ -31,7 +49,8 @@
       removeCSS();
       return;
     }
-    if (key && key === lastKey && css === appliedCss) return;
+    if (key && key === lastKey && css === appliedCss && stylePresent()) return;
+    paused = false;
     appliedCss = css;
     lastKey = key || "";
     injectCSS(css);
@@ -61,44 +80,56 @@
     return catalog;
   }
 
+  function applyEnabledFlag(catalog, flagText) {
+    if (!catalog || typeof flagText !== "string") return catalog;
+    const trimmed = flagText.trim();
+    if (trimmed === "false") catalog.enabled = false;
+    else if (trimmed === "true") catalog.enabled = true;
+    return catalog;
+  }
+
   function loadOverlay() {
     if (!chrome.storage || !chrome.storage.local) {
-      return Promise.resolve({ enabled: true, siteEnabled: {} });
+      return Promise.resolve({ siteEnabled: {} });
     }
     return chrome.storage.local.get("enabledOverlay").then((data) => {
       const overlay = data && data.enabledOverlay;
       if (overlay && typeof overlay === "object") return overlay;
-      return { enabled: true, siteEnabled: {} };
-    }).catch(() => ({ enabled: true, siteEnabled: {} }));
+      return { siteEnabled: {} };
+    }).catch(() => ({ siteEnabled: {} }));
   }
 
   function checkForUpdate(force) {
     const hostname = location.hostname;
     const token = String(Date.now());
+    const gen = ++updateGen;
 
     Promise.all([
       fetchText(extUrl("catalog.json", token)),
       fetchText(extUrl("revision", token)).catch(() => token),
       loadOverlay(),
+      fetchText(extUrl("enabled", token)).catch(() => ""),
     ])
-      .then(([catalogText, revision, overlay]) => {
+      .then(([catalogText, revision, overlay, enabledText]) => {
+        if (gen !== updateGen) return;
         lastRevision = revision;
-        const catalog = applyOverlay(JSON.parse(catalogText), overlay);
+        const catalog = applyEnabledFlag(applyOverlay(JSON.parse(catalogText), overlay), enabledText);
         if (catalog && catalog.enabled === false) {
-          removeCSS();
+          clearStyle();
           return;
         }
         const site = siteForHost ? siteForHost(catalog, hostname) : null;
         if (!site || !site.css) {
-          removeCSS();
+          clearStyle();
           return;
         }
         const key = revision + "\n" + site.id + "\n" + site.css + "\n" + String(site.enabled !== false);
-        if (!force && key === lastKey && appliedCss) return;
+        if (!force && key === lastKey && appliedCss && stylePresent()) return;
         return Promise.all([
           fetchText(extUrl("colors.css", revision || token)).catch(() => ""),
           fetchText(extUrl(site.css, revision || token)),
         ]).then(([colors, siteCss]) => {
+          if (gen !== updateGen) return;
           applyPayload([colors, siteCss].filter(Boolean).join("\n"), key);
         });
       })
@@ -137,6 +168,15 @@
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") checkForUpdate(true);
   });
+
+  ["astro:after-swap", "astro:page-load", "turbo:load", "turbo:render"].forEach((name) => {
+    document.addEventListener(name, ensureStyle);
+  });
+  window.addEventListener("pageshow", ensureStyle);
+
+  new MutationObserver(() => {
+    ensureStyle();
+  }).observe(document.documentElement, { childList: true, subtree: true });
 
   if (window === window.top) {
     setInterval(pollRevision, 800);

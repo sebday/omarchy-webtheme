@@ -46,6 +46,22 @@ write_global_enabled() {
   jq -n --argjson enabled "$1" '{enabled: $enabled}' >"$SETTINGS"
 }
 
+# Polled by content scripts the same way as revision.
+write_runtime_enabled() {
+  mkdir -p "$RUNTIME"
+  printf '%s\n' "$1" >"$RUNTIME/enabled"
+}
+
+publish_catalog() {
+  if [[ -f $RUNTIME/catalog.json ]]; then
+    patch_catalog "$@" || assemble >/dev/null
+  else
+    assemble >/dev/null
+  fi
+  date +%s >"$RUNTIME/revision"
+  notify >/dev/null
+}
+
 notify() {
   if [[ ! -p $FIFO ]]; then
     jq -n '{ok:true, notified:false}'
@@ -213,7 +229,7 @@ write_manifest() {
   jq -n --arg key "$EXTENSION_KEY" '{
     manifest_version: 3,
     name: "Omarchy Webtheme",
-    version: "1.0.16",
+    version: "1.0.17",
     key: $key,
     description: "Omarchy website themes. Manage site packages from the toolbar popup.",
     permissions: ["nativeMessaging", "activeTab", "tabs", "scripting", "notifications", "storage"],
@@ -234,7 +250,7 @@ write_manifest() {
     ],
     web_accessible_resources: [
       {
-        resources: ["catalog.json", "revision", "theme.json", "colors.css", "sites/*"],
+        resources: ["catalog.json", "revision", "enabled", "theme.json", "colors.css", "sites/*"],
         matches: ["<all_urls>"]
       }
     ]
@@ -276,6 +292,7 @@ assemble() {
   done < <(jq -c '.[]' <<<"$sites")
 
   jq -n --argjson sites "$catalog_json" --argjson enabled "$(read_global_enabled)" '{enabled: $enabled, sites: $sites}' >"$RUNTIME/catalog.json"
+  write_runtime_enabled "$(read_global_enabled)"
   write_manifest
   write_plugin_dir
   mkdir -p "$(dirname "$NATIVE_HOST_BIN")"
@@ -422,7 +439,8 @@ cmd_enabled() {
     *) fail "enabled must be true or false" ;;
   esac
   write_global_enabled "$enabled"
-  notify >/dev/null
+  write_runtime_enabled "$enabled"
+  publish_catalog --argjson enabled "$enabled" '.enabled = $enabled'
   jq -n --argjson enabled "$enabled" '{ok:true, enabled:$enabled}'
 }
 
@@ -493,7 +511,9 @@ cmd_set_enabled() {
     css_text=$(cat "$css_path")
   fi
   write_user_package "$site_id" "$name" "$matches" "$enabled" "${theme_css:-}" "$css_text"
-  notify >/dev/null
+  publish_catalog --arg id "$site_id" --argjson enabled "$enabled" '
+    .sites = (.sites | map(if .id == $id then .enabled = $enabled else . end))
+  '
   public_site "$(jq -c --arg id "$site_id" 'map(select(.id == $id)) | .[0]' <<<"$(merged_sites)")"
 }
 

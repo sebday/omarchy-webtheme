@@ -45,13 +45,16 @@ function render(reply, jobs) {
   meta.textContent = on ? enabledCount + " enabled" : "Paused";
 
   const current = tabHost ? WebthemeUI.siteForHost(sites, tabHost) : null;
-  const pending = tabHost ? jobForHost(jobs, tabHost) : null;
+  const pending = !current && tabHost ? jobForHost(jobs, tabHost) : null;
 
-  const otherJobs = (jobs || []).filter((job) => job && job.host && job.host !== tabHost);
+  const otherJobs = (jobs || []).filter((job) => {
+    if (!job || !job.host || job.host === tabHost) return false;
+    return !WebthemeUI.siteForHost(sites, job.host);
+  });
   if (pending) {
-    showNotice("Theming " + pending.host + " in the background.");
+    showNotice("Theming " + pending.host + " in the background. Click to dismiss.");
   } else if (otherJobs.length) {
-    showNotice("Theming " + otherJobs.map((job) => job.host).join(", ") + " in the background.");
+    showNotice("Theming " + otherJobs.map((job) => job.host).join(", ") + " in the background. Click to dismiss.");
   } else {
     showNotice("");
   }
@@ -93,17 +96,26 @@ function render(reply, jobs) {
 async function load() {
   try {
     desktopTheme = await WebthemeUI.themeName();
-    const [catalog, jobsData] = await Promise.all([
-      WebthemeUI.catalogPayload(),
-      chrome.storage.session.get("themeJobs").catch(() => ({})),
-    ]);
-    const jobs = jobsData && Array.isArray(jobsData.themeJobs) ? jobsData.themeJobs : [];
+    const catalog = await WebthemeUI.catalogPayload();
+    const jobs = await WebthemeUI.pruneThemeJobs(catalog.sites);
     render(catalog, jobs);
   } catch (err) {
     meta.textContent = "Failed to load";
     showError(String(err && err.message ? err.message : err));
   }
 }
+
+noticeEl.addEventListener("click", async () => {
+  try {
+    await chrome.storage.session.set({ themeJobs: [] });
+  } catch {
+    /* ignore */
+  }
+  showNotice("");
+  await load();
+});
+noticeEl.title = "Dismiss";
+noticeEl.style.cursor = "pointer";
 
 globalToggle.addEventListener("change", async () => {
   showError("");
