@@ -6,6 +6,7 @@ const personalEl = document.getElementById("personal");
 const personalEmpty = document.getElementById("personal-empty");
 
 WebthemeUI.injectColors();
+WebthemeUI.keepAlive();
 
 function showError(text) {
   errorEl.hidden = !text;

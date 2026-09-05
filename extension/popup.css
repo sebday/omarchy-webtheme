@@ -96,6 +96,23 @@ html.popup #meta:hover {
   padding: 10px 12px;
 }
 
+.card-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 2px;
+}
+
+#current-host {
+  font-weight: 600;
+}
+
+#current-status {
+  font-size: 12px;
+  opacity: 0.8;
+}
+
 .list {
   display: grid;
   gap: 6px;
@@ -128,6 +145,10 @@ html.popup #meta:hover {
   align-items: center;
   gap: 6px;
   font-size: 12px;
+}
+
+[hidden] {
+  display: none !important;
 }
 
 button {

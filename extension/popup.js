@@ -6,13 +6,17 @@ const currentCard = document.getElementById("current");
 const currentHost = document.getElementById("current-host");
 const currentStatus = document.getElementById("current-status");
 const themeBtn = document.getElementById("theme-site");
+const siteEnable = document.getElementById("site-enable");
+const siteToggle = document.getElementById("site-toggle");
 
 let tabUrl = "";
 let tabTitle = "";
 let tabHost = "";
 let desktopTheme = "Omarchy";
+let currentSite = null;
 
 WebthemeUI.injectColors();
+WebthemeUI.keepAlive();
 
 function openAllSites(event) {
   if (event) event.preventDefault();
@@ -54,11 +58,15 @@ function render(reply, jobs) {
 
   if (!tabHost) {
     currentCard.hidden = true;
+    currentSite = null;
     return;
   }
 
   currentCard.hidden = false;
   currentHost.textContent = tabHost;
+  currentSite = current;
+  siteEnable.hidden = true;
+  siteToggle.checked = false;
   if (current && current.enabled !== false && on) {
     currentStatus.textContent = desktopTheme;
     themeBtn.hidden = true;
@@ -66,25 +74,30 @@ function render(reply, jobs) {
     currentStatus.textContent = "Package exists, theming is paused";
     themeBtn.hidden = true;
   } else if (current) {
-    currentStatus.textContent = "Package exists but is disabled";
+    currentStatus.textContent = "Theme available";
     themeBtn.hidden = true;
+    siteEnable.hidden = false;
+    siteToggle.checked = false;
   } else if (pending) {
     currentStatus.textContent = "The default agent is theming this site";
     themeBtn.hidden = true;
+    currentSite = null;
   } else {
     currentStatus.textContent = "No package for this host";
     themeBtn.hidden = false;
+    siteEnable.hidden = true;
+    currentSite = null;
   }
 }
 
 async function load() {
   try {
     desktopTheme = await WebthemeUI.themeName();
-    const [catalog, jobsReply] = await Promise.all([
+    const [catalog, jobsData] = await Promise.all([
       WebthemeUI.catalogPayload(),
-      WebthemeUI.call({ type: "theme-jobs" }),
+      chrome.storage.session.get("themeJobs").catch(() => ({})),
     ]);
-    const jobs = jobsReply && jobsReply.ok !== false && Array.isArray(jobsReply.jobs) ? jobsReply.jobs : [];
+    const jobs = jobsData && Array.isArray(jobsData.themeJobs) ? jobsData.themeJobs : [];
     render(catalog, jobs);
   } catch (err) {
     meta.textContent = "Failed to load";
@@ -98,6 +111,24 @@ globalToggle.addEventListener("change", async () => {
   if (!reply || reply.ok === false) {
     globalToggle.checked = !globalToggle.checked;
     showError((reply && reply.error) || "Could not update theming");
+    return;
+  }
+  await load();
+});
+
+siteToggle.addEventListener("change", async () => {
+  if (!currentSite) return;
+  showError("");
+  siteToggle.disabled = true;
+  const reply = await WebthemeUI.call({
+    type: "set-enabled",
+    siteId: currentSite.id,
+    enabled: siteToggle.checked,
+  });
+  siteToggle.disabled = false;
+  if (!reply || reply.ok === false) {
+    siteToggle.checked = !siteToggle.checked;
+    showError((reply && reply.error) || "Could not update site");
     return;
   }
   await load();

@@ -1,12 +1,14 @@
 <p>
-  <img src="docs/omarchy-org-moon.png" width="32%" alt="omarchy.org on the moon wallpaper" />
-  <img src="docs/omarchy-org-evo.png" width="32%" alt="omarchy.org on the Evo wallpaper" />
-  <img src="docs/omarchy-org-forest.png" width="32%" alt="omarchy.org on the forest wallpaper" />
+  <a href="docs/omarchy-org-moon-full.webp"><img src="docs/omarchy-org-moon.webp" width="32%" alt="omarchy.org on the moon wallpaper" /></a>
+  <a href="docs/omarchy-org-evo-full.webp"><img src="docs/omarchy-org-evo.webp" width="32%" alt="omarchy.org on the Evo wallpaper" /></a>
+  <a href="docs/omarchy-org-forest-full.webp"><img src="docs/omarchy-org-forest.webp" width="32%" alt="omarchy.org on the forest wallpaper" /></a>
 </p>
 
 # Webtheme
 
-Omarchy theme CSS for Brave and Chromium. Install the plugin, restart the browsers once, and matching sites pick up the current Omarchy palette. 
+Style any website to match your Omarchy theme. Websites switch colour scheme with the theme.
+
+Install the plugin and restart the browser to pick the extension. and matching sites pick up the current Omarchy palette. 
 
 The plugin ships a small unpacked MV3 extension and appends it to the existing `--load-extension=` line in Chromium/Brave flags (same mechanism Omarchy uses for WhatsApp Slim).
 
@@ -21,7 +23,9 @@ omarchy plugin add https://github.com/sebday/omarchy-webtheme.git --enable
 - `bash` and `jq` (both ship with Omarchy)
 - Brave and/or Chromium using `~/.config/brave-flags.conf` / `~/.config/chromium-flags.conf`
 
-## Site packages
+## New sites
+
+Use the button in the extension or ask your agent to theme a site. 
 
 Bundled packages live in `sites/<id>/` in this repo. Your own packages (and overrides) go in `~/.config/omarchy/webtheme/sites/<id>/` so plugin updates do not clobber them.
 
@@ -40,17 +44,12 @@ sites/github/
 }
 ```
 
-`style.css` should use the Omarchy web variables from the active theme (`--bg-primary`, `--bg-secondary`, `--text-primary`, `--text-accent`, and the colour tokens). Those come from `colors.css`, generated from `themed/colors.css.tpl` on every `omarchy theme set`. Plugin setup links that template (and `shoelace-hex.css.tpl`) into `~/.config/omarchy/themed/`.
-
-Shoelace docs (`shoelace.style`) use the generated `shoelace-hex.css` from the theme instead of a static `style.css`. Other Shoelace apps belong in your user store with the same `themeCss`.
 
 Drop a new folder into `~/.config/omarchy/webtheme/sites/` and run:
 
 ```bash
 ~/.config/omarchy/plugins/evo.webtheme/bin/webtheme assemble
 ```
-
-The toolbar popup shows the enabled count, a pause switch, and **Theme this site** for an unthemed tab. Package toggles live on the **All sites** page. **Theme this site** sends `THEMEGEN.md` to the Omarchy default agent in the background and shows a desktop toast plus an extension notification. The bar panel only shows counts.
 
 ## CLI
 

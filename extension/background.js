@@ -36,28 +36,37 @@ function siteForHost(catalog, hostname) {
   return null;
 }
 
+let nativeChain = Promise.resolve();
+
 function sendNative(msg) {
-  return new Promise((resolve, reject) => {
-    if (!port) connect();
-    if (!port) {
-      reject(new Error("native host not connected"));
-      return;
-    }
-    const id = String(nextId++);
-    pending.set(id, { resolve, reject });
-    try {
-      port.postMessage(Object.assign({ id }, msg));
-    } catch (err) {
-      pending.delete(id);
-      reject(err);
-      return;
-    }
-    setTimeout(() => {
-      if (!pending.has(id)) return;
-      pending.delete(id);
-      reject(new Error("native host timeout"));
-    }, 12000);
-  });
+  const run = () =>
+    new Promise((resolve, reject) => {
+      if (!port) connect();
+      if (!port) {
+        reject(new Error("native host not connected"));
+        return;
+      }
+      const id = String(nextId++);
+      pending.set(id, { resolve, reject });
+      try {
+        port.postMessage(Object.assign({ id }, msg));
+      } catch (err) {
+        pending.delete(id);
+        reject(err);
+        return;
+      }
+      setTimeout(() => {
+        if (!pending.has(id)) return;
+        pending.delete(id);
+        reject(new Error("native host timeout"));
+      }, 12000);
+    });
+  const queued = nativeChain.then(run, run);
+  nativeChain = queued.then(
+    () => undefined,
+    () => undefined
+  );
+  return queued;
 }
 
 function applyBadge(payload) {
@@ -79,11 +88,87 @@ function extText(path, bust) {
   });
 }
 
+const OVERLAY_KEY = "enabledOverlay";
+
+async function loadOverlay() {
+  try {
+    const data = await chrome.storage.local.get(OVERLAY_KEY);
+    const overlay = data[OVERLAY_KEY];
+    if (overlay && typeof overlay === "object") return overlay;
+  } catch {
+    /* ignore */
+  }
+  return { enabled: true, siteEnabled: {} };
+}
+
+async function saveOverlay(overlay) {
+  try {
+    await chrome.storage.local.set({ [OVERLAY_KEY]: overlay });
+  } catch {
+    /* ignore */
+  }
+}
+
+function applyOverlay(catalog, overlay) {
+  if (!catalog || !overlay) return catalog;
+  if (typeof overlay.enabled === "boolean") catalog.enabled = overlay.enabled;
+  const map = overlay.siteEnabled && typeof overlay.siteEnabled === "object" ? overlay.siteEnabled : {};
+  const sites = Array.isArray(catalog.sites) ? catalog.sites : [];
+  for (let i = 0; i < sites.length; i++) {
+    const site = sites[i];
+    if (!site || !site.id || !Object.prototype.hasOwnProperty.call(map, site.id)) continue;
+    site.enabled = map[site.id] !== false;
+  }
+  return catalog;
+}
+
+async function patchOverlayFromMessage(msg) {
+  const overlay = await loadOverlay();
+  if (msg.type === "enabled") {
+    overlay.enabled = msg.enabled !== false;
+  } else if (msg.type === "set-enabled" && msg.siteId) {
+    overlay.siteEnabled = overlay.siteEnabled || {};
+    overlay.siteEnabled[msg.siteId] = msg.enabled !== false;
+  }
+  await saveOverlay(overlay);
+}
+
+async function hydrateOverlayFromNative() {
+  try {
+    const reply = await sendNative({ type: "list" });
+    if (!reply || reply.ok === false) return;
+    const siteEnabled = {};
+    const sites = Array.isArray(reply.sites) ? reply.sites : [];
+    for (let i = 0; i < sites.length; i++) {
+      const site = sites[i];
+      if (site && site.id) siteEnabled[site.id] = site.enabled !== false;
+    }
+    await saveOverlay({ enabled: reply.enabled !== false, siteEnabled });
+  } catch {
+    /* native host may not be up yet */
+  }
+}
+
 async function readCatalog() {
   const catalog = JSON.parse(await extText("catalog.json", Date.now()));
+  applyOverlay(catalog, await loadOverlay());
   applyBadge(catalog);
   await resolveThemeJobs(catalog);
   return catalog;
+}
+
+async function cssReplyForHost(host) {
+  const catalog = await readCatalog();
+  const bust = String(Date.now());
+  const colors = await extText("colors.css", bust).catch(() => "");
+  const css = await cssForTab(catalog, colors, { url: "https://" + host + "/" }, bust);
+  const site = siteForHost(catalog, host);
+  const revision = await extText("revision", bust).catch(() => bust);
+  return {
+    ok: true,
+    css: css || "",
+    key: revision + "\n" + (site ? site.id + "\n" + site.css : ""),
+  };
 }
 
 async function cssForTab(catalog, colors, tab, bust) {
@@ -250,6 +335,7 @@ async function resolveThemeJobs(catalog) {
 }
 
 function connect() {
+  if (port) return;
   if (reconnectTimer) {
     clearTimeout(reconnectTimer);
     reconnectTimer = null;
@@ -259,7 +345,6 @@ function connect() {
   } catch (err) {
     console.warn("omarchy webtheme: native host missing", err);
     port = null;
-    reconnectTimer = setTimeout(connect, 2000);
     return;
   }
   port.onMessage.addListener((msg) => {
@@ -271,7 +356,7 @@ function connect() {
       return;
     }
     if (msg.type === "reload") {
-      broadcastReload();
+      hydrateOverlayFromNative().finally(() => broadcastReload());
     }
   });
   port.onDisconnect.addListener(() => {
@@ -279,9 +364,12 @@ function connect() {
     port = null;
     for (const waiter of pending.values()) waiter.reject(new Error(err || "native host disconnected"));
     pending.clear();
-    reconnectTimer = setTimeout(connect, 2000);
   });
 }
+
+chrome.runtime.onConnect.addListener((port) => {
+  port.onDisconnect.addListener(() => {});
+});
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (!msg || typeof msg !== "object") {
@@ -294,6 +382,12 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       .catch((err) => sendResponse({ ok: false, error: String(err && err.message ? err.message : err) }));
     return true;
   }
+  if (msg.type === "css-for-host") {
+    cssReplyForHost(String(msg.host || ""))
+      .then((reply) => sendResponse(reply))
+      .catch((err) => sendResponse({ ok: false, error: String(err && err.message ? err.message : err) }));
+    return true;
+  }
   if (msg.type === "theme-jobs") {
     readCatalog()
       .then(() => loadThemeJobs())
@@ -303,15 +397,18 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   }
   sendNative(msg)
     .then((reply) => {
-      if (msg.type === "set-enabled" || msg.type === "enabled") broadcastReload();
-      const done = msg.type === "theme-site" && reply && reply.ok !== false ? startThemeJob(msg, reply) : Promise.resolve();
-      return done.then(() => sendResponse(reply));
+      const tracked = reply && reply.ok !== false && (msg.type === "set-enabled" || msg.type === "enabled");
+      const after = tracked
+        ? patchOverlayFromMessage(msg).then(() => broadcastReload())
+        : Promise.resolve();
+      const job = msg.type === "theme-site" && reply && reply.ok !== false ? startThemeJob(msg, reply) : Promise.resolve();
+      return Promise.all([after, job]).then(() => sendResponse(reply));
     })
     .catch((err) => sendResponse({ ok: false, error: String(err && err.message ? err.message : err) }));
   return true;
 });
 
-chrome.runtime.onStartup.addListener(connect);
-chrome.runtime.onInstalled.addListener(connect);
-connect();
+chrome.runtime.onStartup.addListener(() => refreshBadge());
+chrome.runtime.onInstalled.addListener(() => refreshBadge());
 refreshBadge();
+setTimeout(connect, 0);

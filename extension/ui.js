@@ -22,18 +22,47 @@ const WebthemeUI = {
     }
   },
 
-  async catalogPayload() {
+  applyOverlay(catalog, overlay) {
+    if (!catalog || !overlay) return catalog;
+    if (typeof overlay.enabled === "boolean") catalog.enabled = overlay.enabled;
+    const map = overlay.siteEnabled && typeof overlay.siteEnabled === "object" ? overlay.siteEnabled : {};
+    const sites = Array.isArray(catalog.sites) ? catalog.sites : [];
+    for (let i = 0; i < sites.length; i++) {
+      const site = sites[i];
+      if (!site || !site.id || !Object.prototype.hasOwnProperty.call(map, site.id)) continue;
+      site.enabled = map[site.id] !== false;
+    }
+    return catalog;
+  },
+
+  async overlayFromStorage() {
+    try {
+      const data = await chrome.storage.local.get("enabledOverlay");
+      const overlay = data.enabledOverlay;
+      if (overlay && typeof overlay === "object") return overlay;
+    } catch {
+      /* ignore */
+    }
+    return { enabled: true, siteEnabled: {} };
+  },
+
+  async catalogFromFiles() {
     const catalog = await fetch(chrome.runtime.getURL("catalog.json") + "?v=" + Date.now(), {
       cache: "reload",
     }).then((response) => {
       if (!response.ok) throw new Error("catalog " + response.status);
       return response.json();
     });
+    this.applyOverlay(catalog, await this.overlayFromStorage());
     return {
       ok: true,
       enabled: catalog.enabled !== false,
       sites: Array.isArray(catalog.sites) ? catalog.sites : [],
     };
+  },
+
+  async catalogPayload() {
+    return this.catalogFromFiles();
   },
 
   hostOf(match) {
@@ -68,46 +97,175 @@ const WebthemeUI = {
       .join(", ");
   },
 
-  withTimeout(promise, ms, label) {
-    return Promise.race([
-      promise,
-      new Promise((_, reject) => {
-        setTimeout(() => reject(new Error(label || "timeout")), ms);
-      }),
-    ]);
+  keepAlive() {
+    try {
+      if (this._alive && this._alive.name) return;
+      this._alive = chrome.runtime.connect({ name: "ui" });
+      this._alive.onDisconnect.addListener(() => {
+        this._alive = null;
+        setTimeout(() => this.keepAlive(), 1000);
+      });
+    } catch {
+      /* service worker may be missing; native fallback still works */
+    }
   },
 
-  sendMessageOnce(msg) {
-    return new Promise((resolve, reject) => {
+  enabledSiteForHost(sites, hostname) {
+    for (const site of sites || []) {
+      if (!site || site.enabled === false) continue;
+      for (const pattern of site.matches || []) {
+        if (this.hostMatches(pattern, hostname)) return site;
+      }
+    }
+    return null;
+  },
+
+  async rememberOverlay(msg) {
+    const overlay = await this.overlayFromStorage();
+    if (msg.type === "enabled") {
+      overlay.enabled = msg.enabled !== false;
+    } else if (msg.type === "set-enabled" && msg.siteId) {
+      overlay.siteEnabled = overlay.siteEnabled || {};
+      overlay.siteEnabled[msg.siteId] = msg.enabled !== false;
+    }
+    try {
+      await chrome.storage.local.set({ enabledOverlay: overlay });
+    } catch {
+      /* ignore */
+    }
+  },
+
+  async paintOpenTabs() {
+    if (!chrome.tabs || !chrome.tabs.query) return;
+    const catalog = await this.catalogFromFiles();
+    const on = catalog.enabled !== false;
+    const colors = await fetch(chrome.runtime.getURL("colors.css") + "?v=" + Date.now(), { cache: "reload" })
+      .then((response) => (response.ok ? response.text() : ""))
+      .catch(() => "");
+    const tabs = await chrome.tabs.query({});
+    for (const tab of tabs) {
+      if (tab.id === undefined || !tab.url || !/^https?:/i.test(tab.url)) continue;
+      let host = "";
       try {
-        chrome.runtime.sendMessage(msg, (reply) => {
-          const err = chrome.runtime.lastError;
-          if (err) {
-            reject(new Error(err.message));
-            return;
-          }
-          resolve(reply);
-        });
+        host = new URL(tab.url).hostname;
+      } catch {
+        continue;
+      }
+      const site = on ? this.enabledSiteForHost(catalog.sites, host) : null;
+      let css = "";
+      if (site && site.css) {
+        const siteCss = await fetch(chrome.runtime.getURL(site.css) + "?v=" + Date.now(), { cache: "reload" })
+          .then((response) => (response.ok ? response.text() : ""))
+          .catch(() => "");
+        css = [colors, siteCss].filter(Boolean).join("\n");
+      }
+      const key = String(Date.now()) + "\n" + (site ? site.id + "\n" + site.css : "");
+      chrome.tabs.sendMessage(tab.id, { type: "omarchy-webtheme-reload", css, key }, () => {
+        void chrome.runtime.lastError;
+      });
+      if (!chrome.scripting || typeof chrome.scripting.executeScript !== "function") continue;
+      chrome.scripting
+        .executeScript({
+          target: { tabId: tab.id },
+          func: (nextCss) => {
+            const id = "omarchy-webtheme-style";
+            let el = document.getElementById(id);
+            if (!nextCss) {
+              if (el) el.remove();
+              return;
+            }
+            if (!el) {
+              el = document.createElement("style");
+              el.id = id;
+            }
+            el.textContent = nextCss;
+            (document.head || document.documentElement).appendChild(el);
+          },
+          args: [css],
+        })
+        .catch(() => {});
+    }
+  },
+
+  callNative(msg) {
+    return new Promise((resolve, reject) => {
+      let port;
+      try {
+        port = chrome.runtime.connectNative("com.evo.webtheme");
       } catch (err) {
         reject(err);
+        return;
+      }
+      const id = "ui-" + Date.now() + "-" + Math.random().toString(16).slice(2);
+      let settled = false;
+      const finish = (handler, value) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        try {
+          port.disconnect();
+        } catch {
+          /* ignore */
+        }
+        handler(value);
+      };
+      const timer = setTimeout(() => finish(reject, new Error("native host timeout")), 12000);
+      port.onMessage.addListener((reply) => {
+        if (!reply || reply.type === "reload") return;
+        if (reply.id && String(reply.id) !== id) return;
+        finish(resolve, reply);
+      });
+      port.onDisconnect.addListener(() => {
+        if (settled) {
+          void chrome.runtime.lastError;
+          return;
+        }
+        const err = chrome.runtime.lastError && chrome.runtime.lastError.message;
+        finish(reject, new Error(err || "native host disconnected"));
+      });
+      try {
+        port.postMessage(Object.assign({ id }, msg));
+      } catch (err) {
+        finish(reject, err);
       }
     });
   },
 
   async call(msg) {
     try {
-      return await this.withTimeout(this.sendMessageOnce(msg), 12000, "native host timeout");
+      const reply = await this.callNative(msg);
+      if (reply && reply.ok !== false) {
+        await this.rememberOverlay(msg);
+        this.paintOpenTabs().catch(() => {});
+        if (msg.type === "theme-site") {
+          let host = "site";
+          try {
+            host = msg.url ? new URL(msg.url).hostname : "site";
+          } catch {
+            host = "site";
+          }
+          try {
+            const data = await chrome.storage.session.get("themeJobs");
+            const jobs = (Array.isArray(data.themeJobs) ? data.themeJobs : []).filter((job) => job.host !== host);
+            jobs.push({ host, url: msg.url, title: msg.title || host, startedAt: Date.now() });
+            await chrome.storage.session.set({ themeJobs: jobs });
+          } catch {
+            /* ignore */
+          }
+          if (chrome.notifications && chrome.notifications.create) {
+            chrome.notifications.create("webtheme-theme-" + host, {
+              type: "basic",
+              iconUrl: chrome.runtime.getURL("icon.png"),
+              title: "Theming " + host,
+              message: "The default agent is writing a personal package in the background.",
+              priority: 1,
+            });
+          }
+        }
+      }
+      return reply;
     } catch (err) {
-      const text = String(err && err.message ? err.message : err);
-      if (!/Receiving end does not exist|Could not establish connection/i.test(text)) {
-        return { ok: false, error: text };
-      }
-      await new Promise((resolve) => setTimeout(resolve, 250));
-      try {
-        return await this.withTimeout(this.sendMessageOnce(msg), 12000, "native host timeout");
-      } catch (retryErr) {
-        return { ok: false, error: String(retryErr && retryErr.message ? retryErr.message : retryErr) };
-      }
+      return { ok: false, error: String(err && err.message ? err.message : err) };
     }
   },
 
