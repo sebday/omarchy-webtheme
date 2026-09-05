@@ -183,9 +183,10 @@ theme_display_name() {
 sync_theme() {
   mkdir -p "$RUNTIME"
   local name
-  for name in colors.css shoelace-hex.css; do
+  for name in colors.css; do
     [[ -f $THEME/$name ]] && cp -f "$THEME/$name" "$RUNTIME/$name"
   done
+  rm -f "$RUNTIME/shoelace-hex.css"
   jq -n --arg name "$(theme_display_name)" '{name:$name}' >"$RUNTIME/theme.json"
   date +%s >"$RUNTIME/revision"
   notify >/dev/null
@@ -212,7 +213,7 @@ write_manifest() {
   jq -n --arg key "$EXTENSION_KEY" '{
     manifest_version: 3,
     name: "Omarchy Webtheme",
-    version: "1.0.15",
+    version: "1.0.16",
     key: $key,
     description: "Omarchy website themes. Manage site packages from the toolbar popup.",
     permissions: ["nativeMessaging", "activeTab", "tabs", "scripting", "notifications", "storage"],
@@ -233,7 +234,7 @@ write_manifest() {
     ],
     web_accessible_resources: [
       {
-        resources: ["catalog.json", "revision", "theme.json", "colors.css", "shoelace-hex.css", "sites/*"],
+        resources: ["catalog.json", "revision", "theme.json", "colors.css", "sites/*"],
         matches: ["<all_urls>"]
       }
     ]
@@ -344,11 +345,12 @@ install_hook() {
 install_templates() {
   mkdir -p "$USER_THEMED"
   local name dest
-  for name in colors.css.tpl shoelace-hex.css.tpl; do
+  for name in colors.css.tpl; do
     [[ -f $PLUGIN_THEMED/$name ]] || fail "missing template: $PLUGIN_THEMED/$name"
     dest=$USER_THEMED/$name
     ln -sfn "$PLUGIN_THEMED/$name" "$dest"
   done
+  rm -f "$USER_THEMED/shoelace-hex.css.tpl"
   jq -n --arg dir "$USER_THEMED" '{ok:true, themed:$dir}'
 }
 
@@ -627,7 +629,7 @@ Usage: webtheme <command>
 Commands:
   setup          Assemble extension, flags, theme-set hook, and Omarchy themed templates
   assemble       Rebuild the runtime extension from bundled + user site packages
-  sync-theme     Copy current Omarchy colors.css / shoelace-hex.css into the extension
+  sync-theme     Copy current Omarchy colors.css into the extension
   notify         Tell open browser tabs to reload CSS
   ensure-flags   Append --load-extension= for Chromium and Brave flags
   install-hook   Install the theme-set hook

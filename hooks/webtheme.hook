@@ -17,8 +17,6 @@ EXT="${HOME}/.local/share/omarchy/webtheme/extension"
 if [[ -f $THEME/colors.css ]]; then
   cp -f "$THEME/colors.css" "$EXT/colors.css"
 fi
-if [[ -f $THEME/shoelace-hex.css ]]; then
-  cp -f "$THEME/shoelace-hex.css" "$EXT/shoelace-hex.css"
-fi
+rm -f "$EXT/shoelace-hex.css"
 
 date +%s >"$EXT/revision"

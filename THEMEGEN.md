@@ -15,7 +15,7 @@ If this host already has a **user** package, update that package instead of crea
 ```
 ~/.config/omarchy/webtheme/sites/<id>/
   site.json
-  style.css      # omit when using themeCss
+  style.css
 ```
 
 ### site.json
@@ -33,16 +33,6 @@ If this host already has a **user** package, update that package instead of crea
 - `matches` are Chrome match patterns. Use `https://<host>/*`. Add `https://www.<host>/*` only when that host actually serves the same app.
 - Do not add unrelated hosts, APIs, or CDNs.
 - `enabled` must be `true`.
-
-### Shoelace
-
-If the page is a Shoelace app (`sl-*` elements or `--sl-color-*` tokens), skip `style.css` and set:
-
-```json
-"themeCss": "shoelace-hex.css"
-```
-
-See `sites/shoelace/site.json`.
 
 ## CSS contract
 
@@ -79,6 +69,6 @@ If you can read the live page, inspect computed custom properties and map those.
 
 ## Finish
 
-1. Write `site.json` (and `style.css` unless `themeCss`).
+1. Write `site.json` and `style.css`.
 2. Run `./bin/webtheme assemble`.
 3. Stop. Do not commit, push, install packages, touch browser flags, or edit the unpacked runtime under `~/.local/share/omarchy/webtheme/extension/` by hand.
