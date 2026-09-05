@@ -6,11 +6,15 @@
 
 # Webtheme
 
-Style any website to match your Omarchy theme. Websites switch colour scheme along with the Omarchy theme.
+Style any website in Brave/Chromium to match your Omarchy theme. Websites switch colour scheme along with the Omarchy theme.
 
-Install the plugin and restart the browser to pick the extension. 
+Install the plugin and restart the browser to pick the extension.
 
 The plugin ships a small unpacked MV3 extension and appends it to the existing `--load-extension=` line in Chromium/Brave flags (the same mechanism Omarchy uses for WhatsApp Slim).
+
+Omarchy already renders `~/.config/omarchy/themed/*.tpl` on a theme switch. Webtheme plants `colors.css.tpl` there, so the active palette becomes CSS variables (`--bg-primary`, `--text-accent`). 
+
+A theme-set hook copies that file into the unpacked extension and bumps a revision stamp. The content script watches the stamp, then injects `colors.css` plus the matching site's `style.css` into the tab.
 
 ## Install
 
