@@ -229,7 +229,7 @@ write_manifest() {
   jq -n --arg key "$EXTENSION_KEY" '{
     manifest_version: 3,
     name: "Omarchy Webtheme",
-    version: "1.0.17",
+    version: "1.0.19",
     key: $key,
     description: "Omarchy website themes. Manage site packages from the toolbar popup.",
     permissions: ["nativeMessaging", "activeTab", "tabs", "scripting", "notifications", "storage"],

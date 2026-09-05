@@ -1,5 +1,8 @@
 const globalToggle = document.getElementById("global");
+const globalDesc = document.getElementById("global-desc");
 const meta = document.getElementById("meta");
+const countEl = document.getElementById("count");
+const hero = document.querySelector(".hero");
 const errorEl = document.getElementById("error");
 const noticeEl = document.getElementById("notice");
 const currentCard = document.getElementById("current");
@@ -8,6 +11,11 @@ const currentStatus = document.getElementById("current-status");
 const themeBtn = document.getElementById("theme-site");
 const siteEnable = document.getElementById("site-enable");
 const siteToggle = document.getElementById("site-toggle");
+const siteDesc = document.getElementById("site-desc");
+const statEnabled = document.getElementById("stat-enabled");
+const statBundled = document.getElementById("stat-bundled");
+const statMine = document.getElementById("stat-mine");
+const statTotal = document.getElementById("stat-total");
 
 let tabUrl = "";
 let tabTitle = "";
@@ -41,8 +49,17 @@ function render(reply, jobs) {
   const sites = Array.isArray(reply.sites) ? reply.sites : [];
   const on = reply.enabled !== false;
   const enabledCount = sites.filter((site) => site.enabled !== false).length;
+  const bundledCount = sites.filter((site) => site && site.source !== "user").length;
+  const mineCount = sites.filter((site) => site && site.source === "user").length;
   globalToggle.checked = on;
-  meta.textContent = on ? enabledCount + " enabled" : "Paused";
+  globalDesc.textContent = on ? "Pause all site CSS" : "Theming is paused";
+  meta.textContent = on ? "sites themed" : "Paused";
+  countEl.textContent = on ? String(enabledCount) : "0";
+  hero.classList.toggle("is-paused", !on);
+  statEnabled.textContent = String(enabledCount);
+  statBundled.textContent = String(bundledCount);
+  statMine.textContent = String(mineCount);
+  statTotal.textContent = String(sites.length);
 
   const current = tabHost ? WebthemeUI.siteForHost(sites, tabHost) : null;
   const pending = !current && tabHost ? jobForHost(jobs, tabHost) : null;
@@ -61,34 +78,31 @@ function render(reply, jobs) {
 
   if (!tabHost) {
     currentCard.hidden = true;
+    siteEnable.hidden = true;
     currentSite = null;
     return;
   }
 
-  currentCard.hidden = false;
   currentHost.textContent = tabHost;
   currentSite = current;
-  siteEnable.hidden = true;
-  siteToggle.checked = false;
-  if (current && current.enabled !== false && on) {
-    currentStatus.textContent = desktopTheme;
-    themeBtn.hidden = true;
-  } else if (current && !on) {
-    currentStatus.textContent = "Package exists, theming is paused";
-    themeBtn.hidden = true;
-  } else if (current) {
-    currentStatus.textContent = "Theme available";
-    themeBtn.hidden = true;
+  if (current) {
     siteEnable.hidden = false;
-    siteToggle.checked = false;
+    currentCard.hidden = true;
+    siteToggle.checked = current.enabled !== false;
+    if (!on) siteDesc.textContent = tabHost + " · paused";
+    else if (current.enabled !== false) siteDesc.textContent = tabHost + " · " + desktopTheme;
+    else siteDesc.textContent = tabHost + " · off";
   } else if (pending) {
+    currentCard.hidden = false;
+    siteEnable.hidden = true;
     currentStatus.textContent = "The default agent is theming this site";
     themeBtn.hidden = true;
     currentSite = null;
   } else {
+    currentCard.hidden = false;
+    siteEnable.hidden = true;
     currentStatus.textContent = "No package for this host";
     themeBtn.hidden = false;
-    siteEnable.hidden = true;
     currentSite = null;
   }
 }

@@ -310,8 +310,11 @@ const WebthemeUI = {
 
   row(site, currentId, opts) {
     const el = document.createElement("label");
-    el.className = "row" + (site.id === currentId ? " current" : "");
-    el.innerHTML = "<div><strong></strong><span></span></div><input type='checkbox' />";
+    el.className = "toggle-row" + (site.id === currentId ? " current" : "");
+    el.innerHTML =
+      "<div class='toggle-copy'><strong></strong><span></span></div>" +
+      "<input type='checkbox' class='switch-input' />" +
+      "<span class='switch' aria-hidden='true'></span>";
     el.querySelector("strong").textContent = site.name || site.id;
     el.querySelector("span").textContent = this.hostsLabel(site);
     const box = el.querySelector("input");
