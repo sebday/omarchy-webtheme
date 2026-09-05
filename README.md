@@ -1,3 +1,9 @@
+<p>
+  <img src="docs/omarchy-org-moon.png" width="32%" alt="omarchy.org on the moon wallpaper" />
+  <img src="docs/omarchy-org-evo.png" width="32%" alt="omarchy.org on the Evo wallpaper" />
+  <img src="docs/omarchy-org-forest.png" width="32%" alt="omarchy.org on the forest wallpaper" />
+</p>
+
 # Webtheme
 
 Omarchy theme CSS for Brave and Chromium. Install the plugin, restart the browsers once, and matching sites pick up the current Omarchy palette. 
@@ -44,7 +50,7 @@ Drop a new folder into `~/.config/omarchy/webtheme/sites/` and run:
 ~/.config/omarchy/plugins/evo.webtheme/bin/webtheme assemble
 ```
 
-Manage packages from the Brave/Chromium toolbar popup (toggles, pause, and **Theme this site** for the current tab). The bar panel only shows counts.
+The toolbar popup shows the enabled count, a pause switch, and **Theme this site** for an unthemed tab. Package toggles live on the **All sites** page. **Theme this site** sends `THEMEGEN.md` to the Omarchy default agent in the background and shows a desktop toast plus an extension notification. The bar panel only shows counts.
 
 ## CLI
 

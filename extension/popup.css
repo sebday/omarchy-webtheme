@@ -11,8 +11,35 @@ body {
   background: var(--bg-primary);
   color: var(--text-primary);
   font: 13px/1.4 ui-sans-serif, system-ui, sans-serif;
+}
+
+html.popup,
+html.popup body {
   min-width: 320px;
   max-width: 380px;
+}
+
+html.sites body {
+  min-width: 0;
+  max-width: 880px;
+  margin: 0 auto;
+}
+
+html.sites h2 {
+  margin-top: 0;
+}
+
+.columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px 28px;
+  align-items: start;
+}
+
+@media (max-width: 640px) {
+  .columns {
+    grid-template-columns: 1fr;
+  }
 }
 
 body {
@@ -48,6 +75,15 @@ h2 {
 #meta {
   font-size: 12px;
   opacity: 0.7;
+}
+
+html.popup #meta {
+  cursor: pointer;
+}
+
+html.popup #meta:hover {
+  opacity: 1;
+  color: var(--text-accent);
 }
 
 .card,
@@ -114,8 +150,28 @@ button:hover {
   margin: 0 0 10px;
 }
 
+.notice {
+  color: var(--text-accent);
+  font-size: 12px;
+  margin: 0 0 10px;
+}
+
 .empty {
   font-size: 12px;
   opacity: 0.6;
   margin: 0;
+}
+
+footer {
+  margin-top: 16px;
+}
+
+footer a {
+  color: var(--text-accent);
+  font-size: 12px;
+  text-decoration: none;
+}
+
+footer a:hover {
+  text-decoration: underline;
 }

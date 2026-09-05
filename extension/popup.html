@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html class="popup" lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -24,19 +24,15 @@
       <button id="theme-site" type="button" hidden>Theme this site</button>
     </section>
 
+    <p id="notice" class="notice" hidden></p>
+
     <p id="error" class="error" hidden></p>
 
-    <section>
-      <h2>Bundled</h2>
-      <div id="bundled" class="list"></div>
-    </section>
+    <footer>
+      <a id="all-sites" href="sites.html">All sites</a>
+    </footer>
 
-    <section>
-      <h2>Mine</h2>
-      <div id="mine" class="list"></div>
-      <p id="mine-empty" class="empty" hidden>No personal packages yet.</p>
-    </section>
-
+    <script src="ui.js"></script>
     <script src="popup.js"></script>
   </body>
 </html>

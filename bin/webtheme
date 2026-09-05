@@ -172,14 +172,35 @@ public_site() {
   printf '%s\n' "$pub"
 }
 
+theme_display_name() {
+  local slug pretty
+  slug=$(tr -d '\n' <"$HOME/.local/state/omarchy/current/theme.name" 2>/dev/null || true)
+  [[ -n $slug ]] || { printf 'Omarchy'; return; }
+  pretty=$(printf '%s' "$slug" | sed -E 's/(^|-)([a-z])/\1\u\2/g; s/-/ /g')
+  printf 'Omarchy %s' "$pretty"
+}
+
 sync_theme() {
   mkdir -p "$RUNTIME"
   local name
   for name in colors.css shoelace-hex.css; do
     [[ -f $THEME/$name ]] && cp -f "$THEME/$name" "$RUNTIME/$name"
   done
+  jq -n --arg name "$(theme_display_name)" '{name:$name}' >"$RUNTIME/theme.json"
   date +%s >"$RUNTIME/revision"
   notify >/dev/null
+}
+
+patch_catalog() {
+  local catalog=$RUNTIME/catalog.json
+  [[ -f $catalog ]] || return 1
+  local tmp
+  tmp=$(mktemp)
+  if ! jq "$@" "$catalog" >"$tmp"; then
+    rm -f "$tmp"
+    return 1
+  fi
+  mv -f "$tmp" "$catalog"
 }
 
 write_plugin_dir() {
@@ -191,10 +212,10 @@ write_manifest() {
   jq -n --arg key "$EXTENSION_KEY" '{
     manifest_version: 3,
     name: "Omarchy Webtheme",
-    version: "1.0.7",
+    version: "1.0.11",
     key: $key,
     description: "Omarchy website themes. Manage site packages from the toolbar popup.",
-    permissions: ["nativeMessaging", "activeTab", "tabs", "scripting"],
+    permissions: ["nativeMessaging", "activeTab", "tabs", "scripting", "notifications", "storage"],
     icons: {"16": "icon.png", "48": "icon.png", "128": "icon.png"},
     action: {
       default_title: "Omarchy Webtheme",
@@ -212,7 +233,7 @@ write_manifest() {
     ],
     web_accessible_resources: [
       {
-        resources: ["catalog.json", "revision", "colors.css", "shoelace-hex.css", "sites/*"],
+        resources: ["catalog.json", "revision", "theme.json", "colors.css", "shoelace-hex.css", "sites/*"],
         matches: ["<all_urls>"]
       }
     ]
@@ -223,7 +244,7 @@ assemble() {
   [[ -d $EXTENSION_SRC ]] || fail "missing extension sources: $EXTENSION_SRC"
   mkdir -p "$RUNTIME"
   local name
-  for name in content.js background.js match.js popup.html popup.js popup.css icon.png; do
+  for name in content.js background.js match.js popup.html popup.js popup.css ui.js sites.html sites.js icon.png; do
     [[ -f $EXTENSION_SRC/$name ]] || fail "missing $EXTENSION_SRC/$name"
     cp -f "$EXTENSION_SRC/$name" "$RUNTIME/$name"
   done
@@ -256,6 +277,9 @@ assemble() {
   jq -n --argjson sites "$catalog_json" --argjson enabled "$(read_global_enabled)" '{enabled: $enabled, sites: $sites}' >"$RUNTIME/catalog.json"
   write_manifest
   write_plugin_dir
+  mkdir -p "$(dirname "$NATIVE_HOST_BIN")"
+  cp -f "$NATIVE_HOST_SRC" "$NATIVE_HOST_BIN"
+  chmod 755 "$NATIVE_HOST_BIN"
   sync_theme
   jq -n --arg runtime "$RUNTIME" --argjson sites "$count" '{ok:true, runtime:$runtime, sites:$sites}'
 }
@@ -396,7 +420,12 @@ cmd_enabled() {
     *) fail "enabled must be true or false" ;;
   esac
   write_global_enabled "$enabled"
-  assemble >/dev/null
+  if ! patch_catalog --argjson enabled "$enabled" '.enabled = $enabled'; then
+    assemble >/dev/null
+  else
+    date +%s >"$RUNTIME/revision"
+    notify >/dev/null
+  fi
   jq -n --argjson enabled "$enabled" '{ok:true, enabled:$enabled}'
 }
 
@@ -467,7 +496,14 @@ cmd_set_enabled() {
     css_text=$(cat "$css_path")
   fi
   write_user_package "$site_id" "$name" "$matches" "$enabled" "${theme_css:-}" "$css_text"
-  assemble >/dev/null
+  if ! patch_catalog --arg id "$site_id" --argjson enabled "$enabled" '
+    .sites = (.sites | map(if .id == $id then .enabled = $enabled else . end))
+  '; then
+    assemble >/dev/null
+  else
+    date +%s >"$RUNTIME/revision"
+    notify >/dev/null
+  fi
   public_site "$(jq -c --arg id "$site_id" 'map(select(.id == $id)) | .[0]' <<<"$(merged_sites)")"
 }
 
@@ -521,9 +557,8 @@ cmd_save() {
   cmd_get "$site_id"
 }
 
-fill_theme_prompt() {
-  local url=$1 title=$2 host slug tpl=$PLUGIN_DIR/agent/theme-site.md
-  [[ -f $tpl ]] || fail "missing theme-site rule: $tpl"
+site_host_from_url() {
+  local url=$1 host
   host=${url#http://}
   host=${host#https://}
   host=${host%%/*}
@@ -531,28 +566,40 @@ fill_theme_prompt() {
     host=${host##*@}
   fi
   host=${host%%:*}
+  printf '%s' "$host"
+}
+
+desktop_notify() {
+  local headline=$1 body=$2
+  command -v omarchy-notification-send >/dev/null 2>&1 || return 0
+  omarchy-notification-send --app-name "Omarchy Webtheme" -g "󰏘" -u normal -t 8000 "$headline" "$body" >/dev/null 2>&1 || true
+}
+
+fill_theme_prompt() {
+  local url=$1 title=$2 host slug rules=$PLUGIN_DIR/THEMEGEN.md
+  [[ -f $rules ]] || fail "missing THEMEGEN.md"
+  host=$(site_host_from_url "$url")
   [[ -n $host ]] || fail "could not parse host from $url"
-  slug=$(printf '%s' "$host" | tr '[:upper:]' '[:lower:]' | sed 's/^www\.//; s/[^a-z0-9._-]/-/g; s/^-*//; s/-*$//; s/--*/-/g')
+  slug=$(printf '%s' "$host" | tr '[:upper:]' '[:lower:]' | sed 's/^www\.//; s/\.[^.]*$//; s/[^a-z0-9._-]/-/g; s/\./-/g; s/^-*//; s/-*$//; s/--*/-/g')
   [[ -n $slug ]] || slug=site
   [[ -n $title ]] || title=$host
-  jq -nr --rawfile tpl "$tpl" \
+  jq -nr --rawfile rules "$rules" \
     --arg url "$url" \
     --arg title "$title" \
     --arg host "$host" \
     --arg slug "$slug" \
     --arg user_sites "$USER_SITES" \
     --arg plugin_dir "$PLUGIN_DIR" \
-    --arg webtheme "$PLUGIN_DIR/bin/webtheme" \
-    --arg colors_tpl "$PLUGIN_THEMED/colors.css.tpl" '
-      $tpl
-      | gsub("\\{\\{URL\\}\\}"; $url)
-      | gsub("\\{\\{TITLE\\}\\}"; $title)
-      | gsub("\\{\\{HOST\\}\\}"; $host)
-      | gsub("\\{\\{SLUG\\}\\}"; $slug)
-      | gsub("\\{\\{USER_SITES\\}\\}"; $user_sites)
-      | gsub("\\{\\{PLUGIN_DIR\\}\\}"; $plugin_dir)
-      | gsub("\\{\\{WEBTHEME\\}\\}"; $webtheme)
-      | gsub("\\{\\{COLORS_TPL\\}\\}"; $colors_tpl)
+    --arg webtheme "$PLUGIN_DIR/bin/webtheme" '
+      "Follow THEMEGEN.md and add a personal Webtheme package for this site.\n\n" +
+      "- URL: \($url)\n" +
+      "- Title: \($title)\n" +
+      "- Host: \($host)\n" +
+      "- Suggested id: \($slug)\n" +
+      "- User packages: \($user_sites)\n" +
+      "- Plugin: \($plugin_dir)\n" +
+      "- Assemble with: \($webtheme) assemble\n\n" +
+      $rules
     '
 }
 
@@ -565,15 +612,22 @@ cmd_theme_site() {
       *) fail "unknown option $1" ;;
     esac
   done
-  local url=${1:-} title=${2:-}
+  local url=${1:-} title=${2:-} host prompt
   [[ -n $url ]] || fail "theme-site requires a URL"
   [[ $url =~ ^https?:// ]] || fail "URL must be http(s): $url"
-  local prompt
+  host=$(site_host_from_url "$url")
+  [[ -n $host ]] || fail "could not parse host from $url"
   prompt=$(fill_theme_prompt "$url" "$title")
   if [[ $launch == true ]]; then
     command -v omarchy-agent >/dev/null || fail "omarchy-agent is not on PATH"
-    cd "$PLUGIN_DIR"
-    exec omarchy-agent --prompt "$prompt"
+    desktop_notify "Theming $host" "The default agent is writing a personal package in the background."
+    (
+      cd "$PLUGIN_DIR"
+      exec omarchy-agent --prompt "$prompt"
+    ) </dev/null >/dev/null 2>&1 &
+    disown || true
+    jq -n --arg host "$host" --arg url "$url" '{ok:true, launched:true, host:$host, url:$url}'
+    return
   fi
   printf '%s\n' "$prompt"
 }
@@ -596,7 +650,7 @@ Commands:
   set-enabled <id> <true|false>
   save           Write a user site package from JSON on stdin
   theme-site [--launch] <url> [title]
-                 Print (or launch the default agent with) a theme-this-site prompt
+                 Print THEMEGEN.md prompt, or launch the default agent in the background
 EOF
 }
 

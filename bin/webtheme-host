@@ -102,8 +102,11 @@ handle_message() {
       url=$(jq -r '.url // empty' <<<"$raw")
       title=$(jq -r '.title // empty' <<<"$raw")
       [[ $url =~ ^https?:// ]] || { reply_err "$req_id" "URL must be http(s)"; return 0; }
-      "$webtheme" theme-site --launch "$url" "$title" </dev/null >/dev/null 2>&1 &
-      reply "$req_id" '{"ok":true,"type":"theme-site"}'
+      if out=$("$webtheme" theme-site --launch "$url" "$title" 2>/dev/null); then
+        reply "$req_id" "$(jq -c '. + {type:"theme-site"}' <<<"$out")"
+      else
+        reply_err "$req_id" "theme-site failed"
+      fi
       ;;
   esac
 }

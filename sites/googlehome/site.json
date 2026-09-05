@@ -1,6 +1,0 @@
-{
-  "id": "googlehome",
-  "name": "Google Home",
-  "matches": ["https://home.google.com/*"],
-  "enabled": true
-}

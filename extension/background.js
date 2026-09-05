@@ -56,7 +56,7 @@ function sendNative(msg) {
       if (!pending.has(id)) return;
       pending.delete(id);
       reject(new Error("native host timeout"));
-    }, 5000);
+    }, 12000);
   });
 }
 
@@ -82,6 +82,7 @@ function extText(path, bust) {
 async function readCatalog() {
   const catalog = JSON.parse(await extText("catalog.json", Date.now()));
   applyBadge(catalog);
+  await resolveThemeJobs(catalog);
   return catalog;
 }
 
@@ -171,6 +172,83 @@ function refreshBadge() {
   readCatalog().catch(() => chrome.action.setBadgeText({ text: "" }));
 }
 
+function hostFromUrl(url) {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return "";
+  }
+}
+
+function themeJobId(host) {
+  return "webtheme-theme-" + host;
+}
+
+async function loadThemeJobs() {
+  try {
+    const data = await chrome.storage.session.get("themeJobs");
+    if (Array.isArray(data.themeJobs)) return data.themeJobs;
+  } catch {
+    /* storage.session may be unavailable until the permission is granted */
+  }
+  return [];
+}
+
+async function saveThemeJobs(jobs) {
+  try {
+    await chrome.storage.session.set({ themeJobs: jobs });
+  } catch {
+    /* ignore */
+  }
+}
+
+function notifyChrome(id, title, message) {
+  if (!chrome.notifications || typeof chrome.notifications.create !== "function") return;
+  chrome.notifications.create(
+    id,
+    {
+      type: "basic",
+      iconUrl: chrome.runtime.getURL("icon.png"),
+      title,
+      message,
+      priority: 1,
+    },
+    () => {
+      void chrome.runtime.lastError;
+    }
+  );
+}
+
+async function startThemeJob(msg, reply) {
+  const url = (reply && reply.url) || msg.url || "";
+  const host = (reply && reply.host) || hostFromUrl(url);
+  if (!host) return;
+  const jobs = (await loadThemeJobs()).filter((job) => job.host !== host);
+  jobs.push({ host, url, title: msg.title || host, startedAt: Date.now() });
+  await saveThemeJobs(jobs);
+  notifyChrome(
+    themeJobId(host),
+    "Theming " + host,
+    "The default agent is writing a personal package in the background."
+  );
+}
+
+async function resolveThemeJobs(catalog) {
+  const jobs = await loadThemeJobs();
+  if (!jobs.length) return;
+  const kept = [];
+  const now = Date.now();
+  for (const job of jobs) {
+    if (siteForHost(catalog, job.host)) {
+      notifyChrome(themeJobId(job.host), "Themed " + job.host, "The personal package is on.");
+      continue;
+    }
+    if (now - (job.startedAt || 0) > 45 * 60 * 1000) continue;
+    kept.push(job);
+  }
+  await saveThemeJobs(kept);
+}
+
 function connect() {
   if (reconnectTimer) {
     clearTimeout(reconnectTimer);
@@ -216,10 +294,18 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       .catch((err) => sendResponse({ ok: false, error: String(err && err.message ? err.message : err) }));
     return true;
   }
+  if (msg.type === "theme-jobs") {
+    readCatalog()
+      .then(() => loadThemeJobs())
+      .then((jobs) => sendResponse({ ok: true, jobs }))
+      .catch((err) => sendResponse({ ok: false, error: String(err && err.message ? err.message : err) }));
+    return true;
+  }
   sendNative(msg)
     .then((reply) => {
       if (msg.type === "set-enabled" || msg.type === "enabled") broadcastReload();
-      sendResponse(reply);
+      const done = msg.type === "theme-site" && reply && reply.ok !== false ? startThemeJob(msg, reply) : Promise.resolve();
+      return done.then(() => sendResponse(reply));
     })
     .catch((err) => sendResponse({ ok: false, error: String(err && err.message ? err.message : err) }));
   return true;
