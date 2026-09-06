@@ -68,6 +68,13 @@ Panel {
     root.refresh()
   }
 
+  function runSetup() {
+    if (!webthemeScript || setupProc.running) return
+    loading = true
+    setupProc.command = [webthemeScript, "setup"]
+    setupProc.running = true
+  }
+
   function toggle() {
     if (root.opened) root.close()
     else root.openFromHotkey()
@@ -89,48 +96,113 @@ Panel {
   }
 
   Process {
+    id: setupProc
+    onStarted: { stdoutBuf = ""; stderrBuf = "" }
+    property string stdoutBuf: ""
+    property string stderrBuf: ""
+    stdout: SplitParser {
+      splitMarker: ""
+      onRead: function(chunk) {
+        setupProc.stdoutBuf += chunk
+        if (setupProc.stdoutBuf.length > 262144) {
+          setupProc.signal(15)
+          setupProc.stdoutBuf = ""
+        }
+      }
+    }
+    stderr: SplitParser {
+      splitMarker: ""
+      onRead: function(chunk) {
+        setupProc.stderrBuf += chunk
+        if (setupProc.stderrBuf.length > 4096) {
+          setupProc.signal(15)
+          setupProc.stderrBuf = ""
+        }
+      }
+    }
+    onExited: function(exitCode) {
+      var err = String(stderrBuf || "").trim()
+      if (err) root.statusText = Model.plain(err)
+      root.loading = false
+      root.refresh()
+    }
+  }
+
+  Process {
     id: listProc
-    stdout: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: {
-        var catalog = Model.parseCatalog(text)
+    onStarted: { stdoutBuf = ""; stderrBuf = "" }
+
+    property string stdoutBuf: ""
+    property string stderrBuf: ""
+    stdout: SplitParser {
+      splitMarker: ""
+      onRead: function(chunk) {
+        listProc.stdoutBuf += chunk
+        if (listProc.stdoutBuf.length > 262144) {
+          listProc.signal(15)
+          listProc.stdoutBuf = ""
+        }
+      }
+    }
+    stderr: SplitParser {
+      splitMarker: ""
+      onRead: function(chunk) {
+        listProc.stderrBuf += chunk
+        if (listProc.stderrBuf.length > 4096) {
+          listProc.signal(15)
+          listProc.stderrBuf = ""
+        }
+      }
+    }
+    onExited: function(exitCode) {
+      var catalog = Model.parseCatalog(stdoutBuf)
         root.sites = catalog.sites
         root.globalEnabled = catalog.enabled !== false
         root.shownEnabled = catalog.enabled === false ? 0 : Model.enabledCount(catalog.sites)
         root.loading = false
-      }
-    }
-    stderr: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: {
-        var err = String(text || "").trim()
+      var err = String(stderrBuf || "").trim()
         if (err) root.statusText = err
         root.loading = false
-      }
+      root.loading = false
     }
-    onExited: root.loading = false
   }
 
   Process {
     id: globalProc
-    stdout: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: {
-        root.saving = false
-        root.statusText = ""
-        root.refresh()
+    onStarted: { stdoutBuf = ""; stderrBuf = "" }
+
+    property string stdoutBuf: ""
+    property string stderrBuf: ""
+    stdout: SplitParser {
+      splitMarker: ""
+      onRead: function(chunk) {
+        globalProc.stdoutBuf += chunk
+        if (globalProc.stdoutBuf.length > 262144) {
+          globalProc.signal(15)
+          globalProc.stdoutBuf = ""
+        }
       }
     }
-    stderr: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: {
-        var err = String(text || "").trim()
+    stderr: SplitParser {
+      splitMarker: ""
+      onRead: function(chunk) {
+        globalProc.stderrBuf += chunk
+        if (globalProc.stderrBuf.length > 4096) {
+          globalProc.signal(15)
+          globalProc.stderrBuf = ""
+        }
+      }
+    }
+    onExited: function(exitCode) {
+      root.saving = false
+        root.statusText = ""
+        root.refresh()
+      var err = String(stderrBuf || "").trim()
         if (err) root.statusText = err
         root.saving = false
         root.refresh()
-      }
+      root.saving = false
     }
-    onExited: root.saving = false
   }
 
   IpcHandler {
@@ -177,6 +249,7 @@ Panel {
 
           iconComponent: Component {
             Text {
+              textFormat: Text.PlainText
               text: "󰸌"
               color: root.accent
               font.family: root.fontFamily
@@ -238,6 +311,7 @@ Panel {
         }
 
         Text {
+          textFormat: Text.PlainText
           width: parent.width
           visible: !root.loading
           text: "Manage sites from the Brave or Chromium toolbar extension."
@@ -245,6 +319,21 @@ Panel {
           font.family: root.fontFamily
           font.pixelSize: Style.font.bodySmall
           wrapMode: Text.WordWrap
+        }
+
+        Text {
+          textFormat: Text.PlainText
+          width: parent.width
+          visible: !root.loading
+          text: "Install browser integration"
+          color: root.accent
+          font.family: root.fontFamily
+          font.pixelSize: Style.font.bodySmall
+          MouseArea {
+            anchors.fill: parent
+            cursorShape: Qt.PointingHandCursor
+            onClicked: root.runSetup()
+          }
         }
       }
     }
@@ -265,6 +354,7 @@ Panel {
     color: Qt.rgba(fillColor.r, fillColor.g, fillColor.b, 0.14)
 
     Text {
+      textFormat: Text.PlainText
       id: countText
       anchors.centerIn: parent
       text: parent.loading ? "…" : String(parent.rounded)
@@ -293,6 +383,7 @@ Panel {
       spacing: Style.spacing.labelGap
 
       Text {
+        textFormat: Text.PlainText
         width: parent.width
         text: String(Math.round(tile.animatedValue))
         color: tile.valueColor
@@ -304,6 +395,7 @@ Panel {
       }
 
       Text {
+        textFormat: Text.PlainText
         width: parent.width
         text: tile.label
         color: root.dim

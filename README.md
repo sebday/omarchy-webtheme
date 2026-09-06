@@ -8,7 +8,7 @@
 
 Style any website in Brave/Chromium to match your Omarchy theme. Websites switch colour scheme along with the Omarchy theme.
 
-Install the plugin and restart the browser to pick the extension.
+Install the plugin, then click **Install browser integration** in the panel (or run `webtheme setup`) and restart the browser to pick up the extension.
 
 The plugin ships a small unpacked MV3 extension and appends it to the existing `--load-extension=` line in Chromium/Brave flags (the same mechanism Omarchy uses for WhatsApp Slim).
 
@@ -58,7 +58,7 @@ Drop a new folder into `~/.config/omarchy/webtheme/sites/` and run:
 ## CLI
 
 ```bash
-webtheme setup          # assemble + flags + theme-set hook (runs on plugin enable)
+webtheme setup          # assemble + flags + theme-set hook (explicit panel action or CLI)
 webtheme assemble       # rebuild runtime extension
 webtheme list           # JSON {enabled, sites}
 webtheme enabled [true|false]
@@ -69,3 +69,20 @@ webtheme theme-site [--launch] <url> [title]
 ## License
 
 MIT.
+
+## Removing
+
+```bash
+omarchy plugin remove evo.webtheme
+```
+
+That deletes the plugin directory. It does not delete:
+
+- `~/.config/omarchy/webtheme/`
+- `~/.local/share/omarchy/webtheme/`
+- theme-set hook `~/.config/omarchy/hooks/theme-set.d/webtheme.hook`
+- native-messaging manifests under Brave/Chromium config
+- `colors.css.tpl` in `~/.config/omarchy/themed/`
+- browser flag lines that load the unpacked extension
+
+Network: none at runtime; the extension injects CSS into matching tabs.

@@ -28,10 +28,32 @@ Item {
 
   Process {
     id: setupProc
-    stdout: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: {
-        var raw = String(text || "").trim()
+    onStarted: { stdoutBuf = ""; stderrBuf = "" }
+
+    property string stdoutBuf: ""
+    property string stderrBuf: ""
+    stdout: SplitParser {
+      splitMarker: ""
+      onRead: function(chunk) {
+        setupProc.stdoutBuf += chunk
+        if (setupProc.stdoutBuf.length > 262144) {
+          setupProc.signal(15)
+          setupProc.stdoutBuf = ""
+        }
+      }
+    }
+    stderr: SplitParser {
+      splitMarker: ""
+      onRead: function(chunk) {
+        setupProc.stderrBuf += chunk
+        if (setupProc.stderrBuf.length > 4096) {
+          setupProc.signal(15)
+          setupProc.stderrBuf = ""
+        }
+      }
+    }
+      onExited: function(exitCode) {
+      var raw = String(stdoutBuf || "").trim()
         if (!raw) return
         try {
           var parsed = JSON.parse(raw)
@@ -41,16 +63,10 @@ Item {
         } catch (e) {
           root.lastError = "could not parse webtheme setup"
         }
-      }
-    }
-    stderr: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: {
-        var err = String(text || "").trim()
+      var err = String(stderrBuf || "").trim()
         if (err) root.lastError = err
-      }
     }
   }
 
-  Component.onCompleted: root.setup()
+  Component.onCompleted: {}
 }

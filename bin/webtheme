@@ -15,7 +15,8 @@ SETTINGS=$HOME/.config/omarchy/webtheme/settings.json
 RUNTIME=$HOME/.local/share/omarchy/webtheme/extension
 NATIVE_HOST_BIN=$HOME/.local/share/omarchy/webtheme/webtheme-host
 THEME=$HOME/.local/state/omarchy/current/theme
-FIFO=${XDG_RUNTIME_DIR:-/tmp}/omarchy-webtheme.notify
+: "${XDG_RUNTIME_DIR:?XDG_RUNTIME_DIR is required}"
+FIFO=${XDG_RUNTIME_DIR}/omarchy-webtheme.notify
 NATIVE_HOST_NAME=com.evo.webtheme
 EXTENSION_ID=omkdkmdalfackdbenlncaoimdpnlgcok
 EXTENSION_KEY='MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuR2sl7RIGtD8aw/tQkBSq9o8yJzV2vwnOfzyb1Vzz7uBvwuO7pKqypSvKroV+mcGj2n00QMvM79v3awEdkQ/NMv6VL1+W+e77S+Cd/DKg0qvcqlxpApZTXPkLwGZ2Y45Z6AnIL5kbhYtf6zO0LxvGOAvC/MUSyTsVMfpnSdK5humIDFV4IpWPtup002wcm+tzEbZt7RCmx1P12WzjDAtNpMfsAk7rJjH6h2zY4LZd17ZYeYE5ntZUkqKh/KufthwByoGGmS6cmTuIUf0Rdl2RTQHN8Qjg0jayorQWMptEPYfN92G79vPvk8rHMeKLHeRjMMWPq6mMu5kyZIulmtntwIDAQAB'

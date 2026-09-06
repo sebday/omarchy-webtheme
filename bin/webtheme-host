@@ -6,8 +6,9 @@ set -euo pipefail
 
 export PATH="${HOME}/.local/bin:/usr/share/omarchy/bin:/usr/local/bin:/usr/bin:${PATH:-}"
 
-FIFO="${XDG_RUNTIME_DIR:-/tmp}/omarchy-webtheme.notify"
-LOCK="${XDG_RUNTIME_DIR:-/tmp}/omarchy-webtheme.host.lock"
+: "${XDG_RUNTIME_DIR:?XDG_RUNTIME_DIR is required}"
+FIFO="${XDG_RUNTIME_DIR}/omarchy-webtheme.notify"
+LOCK="${XDG_RUNTIME_DIR}/omarchy-webtheme.host.lock"
 STATE_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/omarchy/webtheme"
 PLUGIN_DIR_FILE="$STATE_DIR/plugin-dir"
 
