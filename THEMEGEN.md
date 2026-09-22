@@ -41,9 +41,14 @@ If this host already has a **user** package, update that package instead of crea
 | Token | Use |
 | --- | --- |
 | `--bg-primary` | page / chrome background |
-| `--bg-secondary` | panels, sidebars, raised surfaces |
+| `--bg-secondary` | panels, sidebars, raised surfaces (`lighter_background`) |
+| `--bg-deep` | inset / shade (`dark_background`) |
 | `--text-primary` | body text |
+| `--text-muted` | secondary text (`dark_foreground`) |
+| `--text-bright` | headings / emphasis (`bright_foreground`) |
 | `--text-accent` | links, highlights, focus |
+| `--border` | dividers (`muted`) |
+| `--border-subtle` | hairlines (`selection`) |
 | `--blue` `--cyan` `--purple` `--pink` `--green` `--orange` `--red` | semantic / chart / accent colours the site already exposes |
 
 Those variables are injected by the extension as `colors.css` on matching tabs. Do not hard-code hex from the current wallpaper. Do not invent a second palette.
