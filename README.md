@@ -66,10 +66,6 @@ webtheme save           # write a user site package from JSON on stdin
 webtheme theme-site [--launch] <url> [title]
 ```
 
-## License
-
-MIT.
-
 ## Removing
 
 ```bash
