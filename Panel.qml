@@ -251,7 +251,7 @@ Panel {
             Text {
               textFormat: Text.PlainText
               text: "󰸌"
-              color: root.accent
+              color: root.foreground
               font.family: root.fontFamily
               font.pixelSize: Style.font.display
             }
@@ -270,7 +270,7 @@ Panel {
         Row {
           visible: !root.loading
           width: parent.width
-          spacing: Style.space(8)
+          spacing: Style.space(16)
 
           StatTile {
             width: (parent.width - parent.spacing * 3) / 4
@@ -365,45 +365,67 @@ Panel {
     }
   }
 
-  component StatTile: BorderSurface {
+  component StatTile: Item {
     id: tile
     property string label: ""
     property color valueColor: root.accent
     property real animatedValue: 0
 
-    implicitHeight: tileColumn.implicitHeight + Style.spacing.lg * 2
-    color: Color.popups.background
-    borderSpec: Border.surfaceSpec("popups", "border", Color.popups.border, 1)
-    radius: Style.cornerRadius
+    implicitWidth: Style.space(108)
+    implicitHeight: Style.font.heading + Style.space(56)
 
-    Column {
-      id: tileColumn
-      anchors.centerIn: parent
-      width: parent.width - Style.spacing.lg * 2
-      spacing: Style.spacing.labelGap
+    Rectangle {
+      id: frame
+      anchors.fill: parent
+      anchors.topMargin: legendChip.visible ? legendChip.height / 2 : 0
+      color: "transparent"
+      radius: Style.space(8)
+      border.width: 1
+      border.color: Qt.rgba(root.dim.r, root.dim.g, root.dim.b, 0.9)
+      antialiasing: true
+    }
 
-      Text {
-        textFormat: Text.PlainText
-        width: parent.width
-        text: String(Math.round(tile.animatedValue))
-        color: tile.valueColor
-        font.family: root.fontFamily
-        font.pixelSize: Style.font.title
-        font.bold: true
-        horizontalAlignment: Text.AlignHCenter
-        elide: Text.ElideRight
+    Item {
+      id: legendChip
+      x: Style.space(14)
+      y: 0
+      width: legendTextItem.implicitWidth + Style.space(8)
+      height: Math.max(1, legendTextItem.implicitHeight)
+      visible: tile.label !== ""
+
+      Rectangle {
+        anchors.fill: parent
+        color: Color.popups.background
       }
 
       Text {
+        id: legendTextItem
+        x: Style.space(4)
+        anchors.verticalCenter: parent.verticalCenter
         textFormat: Text.PlainText
-        width: parent.width
         text: tile.label
         color: root.dim
         font.family: root.fontFamily
         font.pixelSize: Style.font.caption
-        horizontalAlignment: Text.AlignHCenter
-        elide: Text.ElideRight
+        font.bold: true
       }
+    }
+
+    Text {
+      anchors.fill: frame
+      anchors.leftMargin: Style.space(8)
+      anchors.rightMargin: Style.space(8)
+      textFormat: Text.PlainText
+      text: String(Math.round(tile.animatedValue))
+      color: tile.valueColor
+      font.family: root.fontFamily
+      font.pixelSize: Style.font.display
+      font.bold: true
+      horizontalAlignment: Text.AlignHCenter
+      verticalAlignment: Text.AlignVCenter
+      elide: Text.ElideRight
+      fontSizeMode: Text.HorizontalFit
+      minimumPixelSize: Style.font.body
     }
   }
 }
